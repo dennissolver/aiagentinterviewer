@@ -45,7 +45,7 @@ export default function CreateAgentPage() {
       }
 
       // Initialize ElevenLabs conversation
-      const { Conversation } = await import('@11labs/client');
+      const { Conversation } = await import('@elevenlabs/client');
       
       const conv = await Conversation.startSession({
         agentId: data.agentId,

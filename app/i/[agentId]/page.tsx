@@ -78,7 +78,7 @@ export default function VoiceInterviewPage() {
       setInterviewId(data.interviewId);
 
       // Initialize ElevenLabs conversation
-      const { Conversation } = await import('@11labs/client');
+      const { Conversation } = await import('@elevenlabs/client');
 
       const conv = await Conversation.startSession({
         agentId: data.elevenLabsAgentId || agent.elevenlabs_agent_id,
