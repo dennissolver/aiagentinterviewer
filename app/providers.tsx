@@ -1,17 +1,19 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-
-const Toaster = dynamic(
-  () => import('sonner').then((mod) => mod.Toaster),
-  { ssr: false }
-);
+import { Toaster } from 'sonner';
+import { useEffect, useState } from 'react';
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <>
       {children}
-      <Toaster position="top-right" richColors />
+      {mounted && <Toaster position="top-right" richColors />}
     </>
   );
 }
