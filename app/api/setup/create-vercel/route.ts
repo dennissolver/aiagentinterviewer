@@ -3,11 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { projectName, githubRepo, envVars } = await request.json();
+    const { platformName, githubRepoName, supabase, elevenlabs, companyName } = await request.json();
 
-    if (!projectName || !githubRepo) {
+    if (!platformName || !githubRepoName) {
       return NextResponse.json(
-        { error: 'Project name and GitHub repo required' },
+        { error: 'Platform name and GitHub repo required' },
         { status: 400 }
       );
     }
@@ -15,17 +15,56 @@ export async function POST(request: NextRequest) {
     const vercelToken = process.env.VERCEL_TOKEN;
     const vercelTeamId = process.env.VERCEL_TEAM_ID;
     const githubOwner = process.env.GITHUB_TEMPLATE_OWNER || 'dennissolver';
+    const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
 
     if (!vercelToken) {
       return NextResponse.json({ error: 'VERCEL_TOKEN not configured' }, { status: 500 });
     }
 
-    const safeName = projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 100);
+    const safeName = platformName.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 100);
     const teamQuery = vercelTeamId ? `?teamId=${vercelTeamId}` : '';
+    const vercelUrl = `https://${safeName}.vercel.app`;
 
+    // Build complete env vars
+    const envVars: Record<string, string> = {
+      NEXT_PUBLIC_SUPABASE_URL: supabase?.url || '',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: supabase?.anonKey || '',
+      SUPABASE_SERVICE_ROLE_KEY: supabase?.serviceKey || '',
+      ELEVENLABS_API_KEY: elevenlabsApiKey || '',
+      ELEVENLABS_SETUP_AGENT_ID: elevenlabs?.agentId || '',
+      NEXT_PUBLIC_APP_URL: vercelUrl,
+      NEXT_PUBLIC_COMPANY_NAME: companyName || '',
+    };
+
+    // Check if project already exists
+    console.log('Checking for existing Vercel project:', safeName);
+    
+    const checkRes = await fetch(`https://api.vercel.com/v9/projects/${safeName}${teamQuery}`, {
+      headers: { Authorization: `Bearer ${vercelToken}` },
+    });
+
+    if (checkRes.ok) {
+      const existing = await checkRes.json();
+      console.log('Found existing project:', existing.id);
+      
+      // Update env vars
+      await setEnvVars(vercelToken, existing.id, envVars, vercelTeamId);
+      
+      // Trigger redeploy
+      await triggerDeployment(vercelToken, safeName, existing.id, githubOwner, githubRepoName, vercelTeamId);
+      
+      return NextResponse.json({
+        success: true,
+        projectId: existing.id,
+        url: vercelUrl,
+        projectName: safeName,
+        alreadyExists: true,
+      });
+    }
+
+    // Create new project
     console.log('Creating Vercel project:', safeName);
 
-    // Create Vercel project linked to GitHub
     const createRes = await fetch(`https://api.vercel.com/v10/projects${teamQuery}`, {
       method: 'POST',
       headers: {
@@ -37,7 +76,7 @@ export async function POST(request: NextRequest) {
         framework: 'nextjs',
         gitRepository: {
           type: 'github',
-          repo: `${githubOwner}/${githubRepo}`,
+          repo: `${githubOwner}/${githubRepoName}`,
         },
         buildCommand: 'npm run build',
         outputDirectory: '.next',
@@ -47,22 +86,6 @@ export async function POST(request: NextRequest) {
 
     if (!createRes.ok) {
       const error = await createRes.json();
-
-      // If exists, get existing project
-      if (error.error?.code === 'project_exists') {
-        console.log('Project exists, fetching...');
-        const existing = await getProject(vercelToken, safeName, vercelTeamId);
-        if (existing) {
-          await setEnvVars(vercelToken, existing.id, envVars, vercelTeamId);
-          return NextResponse.json({
-            success: true,
-            projectId: existing.id,
-            url: `https://${safeName}.vercel.app`,
-            alreadyExists: true,
-          });
-        }
-      }
-
       console.error('Vercel creation failed:', error);
       return NextResponse.json(
         { error: error.error?.message || 'Failed to create project' },
@@ -73,19 +96,18 @@ export async function POST(request: NextRequest) {
     const project = await createRes.json();
     console.log('Vercel project created:', project.id);
 
-    // Set environment variables
-    if (envVars && Object.keys(envVars).length > 0) {
-      await setEnvVars(vercelToken, project.id, envVars, vercelTeamId);
-    }
+    // Set all environment variables
+    console.log('Setting environment variables...');
+    await setEnvVars(vercelToken, project.id, envVars, vercelTeamId);
 
-    // Trigger deployment
+    // Trigger initial deployment
     console.log('Triggering deployment...');
-    const deployUrl = await triggerDeployment(vercelToken, safeName, project.id, githubOwner, githubRepo, vercelTeamId);
+    await triggerDeployment(vercelToken, safeName, project.id, githubOwner, githubRepoName, vercelTeamId);
 
     return NextResponse.json({
       success: true,
       projectId: project.id,
-      url: deployUrl || `https://${safeName}.vercel.app`,
+      url: vercelUrl,
       projectName: safeName,
     });
 
@@ -96,14 +118,6 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-async function getProject(token: string, name: string, teamId?: string): Promise<any | null> {
-  const teamQuery = teamId ? `?teamId=${teamId}` : '';
-  const res = await fetch(`https://api.vercel.com/v9/projects/${name}${teamQuery}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.ok ? res.json() : null;
 }
 
 async function setEnvVars(
@@ -119,18 +133,22 @@ async function setEnvVars(
 
     try {
       // Check if exists
-      const getRes = await fetch(
-        `https://api.vercel.com/v9/projects/${projectId}/env${teamQuery}&key=${key}`,
+      const listRes = await fetch(
+        `https://api.vercel.com/v9/projects/${projectId}/env${teamQuery}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      
+      let existingId: string | null = null;
+      if (listRes.ok) {
+        const data = await listRes.json();
+        const existing = data.envs?.find((e: any) => e.key === key);
+        if (existing) existingId = existing.id;
+      }
 
-      const existing = await getRes.json();
-      const existingVar = existing.envs?.find((e: any) => e.key === key);
-
-      if (existingVar) {
+      if (existingId) {
         // Update existing
         await fetch(
-          `https://api.vercel.com/v9/projects/${projectId}/env/${existingVar.id}${teamQuery}`,
+          `https://api.vercel.com/v9/projects/${projectId}/env/${existingId}${teamQuery}`,
           {
             method: 'PATCH',
             headers: {
@@ -143,6 +161,7 @@ async function setEnvVars(
             }),
           }
         );
+        console.log(`Updated env: ${key}`);
       } else {
         // Create new
         await fetch(`https://api.vercel.com/v10/projects/${projectId}/env${teamQuery}`, {
@@ -158,9 +177,8 @@ async function setEnvVars(
             target: ['production', 'preview', 'development'],
           }),
         });
+        console.log(`Created env: ${key}`);
       }
-
-      console.log(`Set env var: ${key}`);
     } catch (err) {
       console.warn(`Failed to set ${key}:`, err);
     }
@@ -174,7 +192,7 @@ async function triggerDeployment(
   owner: string,
   repo: string,
   teamId?: string
-): Promise<string | null> {
+): Promise<void> {
   try {
     const teamQuery = teamId ? `?teamId=${teamId}` : '';
     const res = await fetch(`https://api.vercel.com/v13/deployments${teamQuery}`, {
@@ -198,11 +216,10 @@ async function triggerDeployment(
     if (res.ok) {
       const deployment = await res.json();
       console.log('Deployment triggered:', deployment.id);
-      return deployment.url ? `https://${deployment.url}` : null;
+    } else {
+      console.warn('Deployment trigger response:', await res.text());
     }
   } catch (err) {
     console.warn('Deployment trigger failed:', err);
   }
-
-  return null;
 }

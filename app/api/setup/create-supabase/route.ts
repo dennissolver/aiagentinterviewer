@@ -1,14 +1,12 @@
 // app/api/setup/create-supabase/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 
 export async function POST(request: NextRequest) {
   try {
-    const { projectName } = await request.json();
+    const { platformName } = await request.json();
 
-    if (!projectName) {
-      return NextResponse.json({ error: 'Project name required' }, { status: 400 });
+    if (!platformName) {
+      return NextResponse.json({ error: 'Platform name required' }, { status: 400 });
     }
 
     const supabaseAccessToken = process.env.SUPABASE_ACCESS_TOKEN;
@@ -21,10 +19,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const safeName = projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40);
-    const dbPassword = generatePassword();
+    const safeName = platformName.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 40);
+    const inferredVercelUrl = `https://${safeName}.vercel.app`;
 
-    // ========== Step 1: Create Supabase Project ==========
+    // ========== Check if project already exists ==========
+    console.log('Checking for existing Supabase project:', safeName);
+    
+    const listRes = await fetch('https://api.supabase.com/v1/projects', {
+      headers: { Authorization: `Bearer ${supabaseAccessToken}` },
+    });
+    
+    const projects = await listRes.json();
+    const existing = projects.find((p: any) => p.name === safeName);
+    
+    if (existing) {
+      console.log('Found existing project:', existing.id);
+      
+      const keysRes = await fetch(
+        `https://api.supabase.com/v1/projects/${existing.id}/api-keys`,
+        { headers: { Authorization: `Bearer ${supabaseAccessToken}` } }
+      );
+      
+      const keys = await keysRes.json();
+      const anonKey = keys.find((k: any) => k.name === 'anon')?.api_key;
+      const serviceKey = keys.find((k: any) => k.name === 'service_role')?.api_key;
+      
+      // Still configure auth URLs in case they weren't set
+      await configureAuthUrls(supabaseAccessToken, existing.id, inferredVercelUrl);
+      
+      return NextResponse.json({
+        success: true,
+        projectId: existing.id,
+        url: `https://${existing.id}.supabase.co`,
+        anonKey,
+        serviceKey,
+        vercelUrl: inferredVercelUrl,
+        alreadyExists: true,
+      });
+    }
+
+    // ========== Create new project ==========
+    const dbPassword = generatePassword();
     console.log('Creating Supabase project:', safeName);
 
     const createRes = await fetch('https://api.supabase.com/v1/projects', {
@@ -36,7 +71,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         name: safeName,
         organization_id: supabaseOrgId,
-        region: 'ap-southeast-2', // Sydney - closest to AU
+        region: 'ap-southeast-2',
         plan: 'free',
         db_pass: dbPassword,
       }),
@@ -55,11 +90,11 @@ export async function POST(request: NextRequest) {
     const projectRef = project.id;
     console.log('Supabase project created:', projectRef);
 
-    // ========== Step 2: Wait for Project Ready ==========
+    // Wait for project ready
     console.log('Waiting for project to be ready...');
     await waitForProjectReady(supabaseAccessToken, projectRef);
 
-    // ========== Step 3: Get API Keys ==========
+    // Get API keys
     const keysRes = await fetch(
       `https://api.supabase.com/v1/projects/${projectRef}/api-keys`,
       { headers: { Authorization: `Bearer ${supabaseAccessToken}` } }
@@ -75,13 +110,17 @@ export async function POST(request: NextRequest) {
 
     const supabaseUrl = `https://${projectRef}.supabase.co`;
 
-    // ========== Step 4: Run Schema Migration ==========
+    // Run schema migration
     console.log('Running schema migration...');
     await runMigration(supabaseAccessToken, projectRef);
 
-    // ========== Step 5: Create Storage Buckets ==========
+    // Create storage buckets
     console.log('Creating storage buckets...');
     await createStorageBuckets(supabaseUrl, serviceKey);
+
+    // Configure auth URLs
+    console.log('Configuring auth URLs...');
+    await configureAuthUrls(supabaseAccessToken, projectRef, inferredVercelUrl);
 
     return NextResponse.json({
       success: true,
@@ -89,6 +128,7 @@ export async function POST(request: NextRequest) {
       url: supabaseUrl,
       anonKey,
       serviceKey,
+      vercelUrl: inferredVercelUrl,
     });
 
   } catch (error: any) {
@@ -109,7 +149,7 @@ function generatePassword(): string {
   return password;
 }
 
-async function waitForProjectReady(token: string, projectRef: string, maxWait = 120000): Promise<void> {
+async function waitForProjectReady(token: string, projectRef: string, maxWait = 180000): Promise<void> {
   const startTime = Date.now();
 
   while (Date.now() - startTime < maxWait) {
@@ -131,12 +171,46 @@ async function waitForProjectReady(token: string, projectRef: string, maxWait = 
   throw new Error('Timeout waiting for project to be ready');
 }
 
+async function configureAuthUrls(token: string, projectRef: string, vercelUrl: string): Promise<void> {
+  try {
+    const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/config/auth`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        site_url: vercelUrl,
+        uri_allow_list: [
+          `${vercelUrl}/**`,
+          `${vercelUrl}`,
+          'http://localhost:3000/**',
+          'http://localhost:3000',
+        ],
+        redirect_urls: [
+          `${vercelUrl}/auth/callback`,
+          `${vercelUrl}/`,
+          'http://localhost:3000/auth/callback',
+          'http://localhost:3000/',
+        ],
+      }),
+    });
+
+    if (res.ok) {
+      console.log('Auth URLs configured:', vercelUrl);
+    } else {
+      const error = await res.json().catch(() => ({}));
+      console.warn('Auth URL config warning:', error);
+    }
+  } catch (err) {
+    console.warn('Could not configure auth URLs:', err);
+  }
+}
+
 async function runMigration(token: string, projectRef: string): Promise<void> {
   const schema = `
--- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Clients table
 CREATE TABLE IF NOT EXISTS clients (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   email TEXT UNIQUE NOT NULL,
@@ -146,12 +220,11 @@ CREATE TABLE IF NOT EXISTS clients (
   agents_limit INT DEFAULT 3,
   interviews_limit INT DEFAULT 100,
   setup_data JSONB DEFAULT '{}',
-  branding JSONB DEFAULT '{"primary_color": "#7C3AED", "background_color": "#0F172A"}',
+  branding JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Agents table
 CREATE TABLE IF NOT EXISTS agents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
@@ -170,15 +243,12 @@ CREATE TABLE IF NOT EXISTS agents (
   constraints TEXT[],
   system_prompt TEXT,
   first_message TEXT,
-  primary_color TEXT DEFAULT '#7C3AED',
-  background_color TEXT DEFAULT '#0F172A',
   total_interviews INT DEFAULT 0,
   completed_interviews INT DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Interviews table
 CREATE TABLE IF NOT EXISTS interviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
@@ -200,22 +270,11 @@ CREATE TABLE IF NOT EXISTS interviews (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes
 CREATE INDEX IF NOT EXISTS idx_clients_email ON clients(email);
 CREATE INDEX IF NOT EXISTS idx_agents_client_id ON agents(client_id);
 CREATE INDEX IF NOT EXISTS idx_agents_slug ON agents(slug);
-CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 CREATE INDEX IF NOT EXISTS idx_interviews_agent_id ON interviews(agent_id);
 CREATE INDEX IF NOT EXISTS idx_interviews_status ON interviews(status);
-CREATE INDEX IF NOT EXISTS idx_interviews_conversation ON interviews(conversation_id);
-
--- Helper function
-CREATE OR REPLACE FUNCTION increment_agent_interviews(agent_uuid UUID)
-RETURNS void AS $$
-BEGIN
-  UPDATE agents SET total_interviews = total_interviews + 1 WHERE id = agent_uuid;
-END;
-$$ LANGUAGE plpgsql;
   `;
 
   const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
@@ -228,25 +287,18 @@ $$ LANGUAGE plpgsql;
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    console.warn('Migration warning:', error);
-    // Don't throw - might already exist
+    console.warn('Migration warning (may already exist)');
   } else {
     console.log('Schema migration complete');
   }
 }
 
 async function createStorageBuckets(supabaseUrl: string, serviceKey: string): Promise<void> {
-  const buckets = [
-    { name: 'transcripts', public: false, fileSizeLimit: 10485760 }, // 10MB
-    { name: 'recordings', public: false, fileSizeLimit: 104857600 }, // 100MB
-    { name: 'exports', public: false, fileSizeLimit: 52428800 }, // 50MB
-    { name: 'assets', public: true, fileSizeLimit: 5242880 }, // 5MB
-  ];
+  const buckets = ['transcripts', 'recordings', 'exports', 'assets'];
 
-  for (const bucket of buckets) {
+  for (const name of buckets) {
     try {
-      const res = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+      await fetch(`${supabaseUrl}/storage/v1/bucket`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${serviceKey}`,
@@ -254,29 +306,14 @@ async function createStorageBuckets(supabaseUrl: string, serviceKey: string): Pr
           apikey: serviceKey,
         },
         body: JSON.stringify({
-          id: bucket.name,
-          name: bucket.name,
-          public: bucket.public,
-          file_size_limit: bucket.fileSizeLimit,
-          allowed_mime_types: bucket.name === 'assets' 
-            ? ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']
-            : bucket.name === 'recordings'
-            ? ['audio/mpeg', 'audio/wav', 'audio/webm', 'audio/ogg']
-            : ['application/json', 'text/plain', 'text/csv', 'application/pdf'],
+          id: name,
+          name: name,
+          public: name === 'assets',
         }),
       });
-
-      if (res.ok) {
-        console.log(`Created bucket: ${bucket.name}`);
-      } else {
-        const error = await res.json().catch(() => ({}));
-        // Bucket might already exist
-        if (!error.message?.includes('already exists')) {
-          console.warn(`Bucket ${bucket.name} warning:`, error);
-        }
-      }
+      console.log(`Created bucket: ${name}`);
     } catch (err) {
-      console.warn(`Bucket ${bucket.name} error:`, err);
+      console.warn(`Bucket ${name} may already exist`);
     }
   }
 }
