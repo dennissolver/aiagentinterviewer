@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(req: Request) {
   const formData = await req.formData();
-
+  
   const { data, error } = await supabaseAdmin
     .from("demo_leads")
     .insert({
@@ -21,6 +21,7 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.redirect(
-    new URL(`/demo?leadId=${data.id}`, req.url)
+    new URL(`/demo?leadId=${data.id}`, req.url),
+    { status: 303 }
   );
 }
