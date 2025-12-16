@@ -1,9 +1,11 @@
+// app/factory/provision/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Building2, User, Mic, CheckCircle, ArrowRight, ArrowLeft,
-  Rocket, Loader2, Globe, Database, Phone, Mail, ExternalLink
+  Rocket, Loader2, Globe, Database, Phone, Mail, ExternalLink, Layout
 } from 'lucide-react';
 
 // =============================================================================
@@ -13,6 +15,7 @@ import {
 type Step = 'company' | 'admin' | 'voice' | 'review' | 'creating';
 
 interface FormData {
+  platformName: string;
   companyName: string;
   companyWebsite: string;
   companyEmail: string;
@@ -26,9 +29,9 @@ interface FormData {
 
 interface CreationStatus {
   supabase: 'pending' | 'creating' | 'done' | 'error';
-  elevenlabs: 'pending' | 'creating' | 'done' | 'error';
   github: 'pending' | 'creating' | 'done' | 'error';
   vercel: 'pending' | 'creating' | 'done' | 'error';
+  elevenlabs: 'pending' | 'creating' | 'done' | 'error';
   deployment: 'pending' | 'creating' | 'done' | 'error';
 }
 
@@ -44,14 +47,38 @@ interface CreatedResources {
 }
 
 // =============================================================================
-// COMPONENT
+// MAIN COMPONENT WRAPPER
 // =============================================================================
 
-export default function SetupWizard() {
+export default function ProvisionPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-4" />
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </div>
+    }>
+      <SetupWizard />
+    </Suspense>
+  );
+}
+
+// =============================================================================
+// SETUP WIZARD COMPONENT
+// =============================================================================
+
+function SetupWizard() {
+  const searchParams = useSearchParams();
+  const leadId = searchParams.get('leadId');
+
   const [step, setStep] = useState<Step>('company');
   const [error, setError] = useState('');
+  const [loadingLead, setLoadingLead] = useState(!!leadId);
 
   const [formData, setFormData] = useState<FormData>({
+    platformName: '',
     companyName: '',
     companyWebsite: '',
     companyEmail: '',
@@ -65,9 +92,9 @@ export default function SetupWizard() {
 
   const [creationStatus, setCreationStatus] = useState<CreationStatus>({
     supabase: 'pending',
-    elevenlabs: 'pending',
     github: 'pending',
     vercel: 'pending',
+    elevenlabs: 'pending',
     deployment: 'pending',
   });
 
@@ -83,6 +110,33 @@ export default function SetupWizard() {
   });
 
   // ---------------------------------------------------------------------------
+  // LOAD LEAD DATA
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (leadId) {
+      fetch(`/api/demo/status/${leadId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && !data.error) {
+            setFormData(prev => ({
+              ...prev,
+              platformName: data.company ? `${data.company} Interviews` : prev.platformName,
+              companyName: data.company || prev.companyName,
+              companyEmail: data.email || prev.companyEmail,
+              adminFirstName: data.first_name || data.firstName || prev.adminFirstName,
+              adminLastName: data.last_name || data.lastName || prev.adminLastName,
+              adminEmail: data.email || prev.adminEmail,
+              adminPhone: data.phone || prev.adminPhone,
+            }));
+          }
+          setLoadingLead(false);
+        })
+        .catch(() => setLoadingLead(false));
+    }
+  }, [leadId]);
+
+  // ---------------------------------------------------------------------------
   // HANDLERS
   // ---------------------------------------------------------------------------
 
@@ -93,7 +147,7 @@ export default function SetupWizard() {
   const validateStep = (currentStep: Step): boolean => {
     switch (currentStep) {
       case 'company':
-        return !!(formData.companyName && formData.companyEmail);
+        return !!(formData.platformName && formData.companyName && formData.companyEmail);
       case 'admin':
         return !!(formData.adminFirstName && formData.adminLastName && formData.adminEmail);
       case 'voice':
@@ -121,14 +175,14 @@ export default function SetupWizard() {
   };
 
   // ---------------------------------------------------------------------------
-  // CREATION FLOW
+  // CREATION FLOW (Correct order: Supabase → GitHub → Vercel → ElevenLabs)
   // ---------------------------------------------------------------------------
 
   const startCreation = async () => {
     setStep('creating');
     setError('');
 
-    const projectSlug = formData.companyName
+    const projectSlug = formData.platformName
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
@@ -175,34 +229,9 @@ export default function SetupWizard() {
       }));
       console.log('✓ Supabase created:', supabaseProjectId);
 
-      setCreationStatus(prev => ({ ...prev, supabase: 'done', elevenlabs: 'creating' }));
+      setCreationStatus(prev => ({ ...prev, supabase: 'done', github: 'creating' }));
 
-      // ========== Step 2: Create ElevenLabs Agent ==========
-      console.log('Creating ElevenLabs agent...');
-
-      const elevenlabsRes = await fetch('/api/setup/create-elevenlabs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentName: formData.agentName,
-          voiceGender: formData.voiceGender,
-          companyName: formData.companyName,
-          webhookUrl: `${vercelUrl || ''}/api/webhooks/elevenlabs`,
-        }),
-      });
-
-      if (elevenlabsRes.ok) {
-        const elevenlabsData = await elevenlabsRes.json();
-        elevenlabsAgentId = elevenlabsData.agentId;
-        setCreatedResources(prev => ({ ...prev, elevenlabsAgentId }));
-        console.log('✓ ElevenLabs agent created:', elevenlabsAgentId);
-      } else {
-        console.warn('ElevenLabs creation failed, continuing...');
-      }
-
-      setCreationStatus(prev => ({ ...prev, elevenlabs: 'done', github: 'creating' }));
-
-      // ========== Step 3: Create GitHub Repository ==========
+      // ========== Step 2: Create GitHub Repository ==========
       console.log('Creating GitHub repository...');
 
       const githubRes = await fetch('/api/setup/create-github', {
@@ -211,6 +240,7 @@ export default function SetupWizard() {
         body: JSON.stringify({
           repoName: projectSlug,
           formData: {
+            platformName: formData.platformName,
             companyName: formData.companyName,
             companyWebsite: formData.companyWebsite,
             companyEmail: formData.companyEmail,
@@ -222,7 +252,6 @@ export default function SetupWizard() {
           createdResources: {
             supabaseUrl,
             supabaseAnonKey,
-            elevenlabsAgentId,
           },
         }),
       });
@@ -241,7 +270,7 @@ export default function SetupWizard() {
 
       setCreationStatus(prev => ({ ...prev, github: 'done', vercel: 'creating' }));
 
-      // ========== Step 4: Create Vercel Project ==========
+      // ========== Step 3: Create Vercel Project ==========
       console.log('Creating Vercel project...');
 
       const vercelRes = await fetch('/api/setup/create-vercel', {
@@ -254,8 +283,7 @@ export default function SetupWizard() {
             NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
             NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey,
             SUPABASE_SERVICE_ROLE_KEY: supabaseServiceKey,
-            ELEVENLABS_API_KEY: '', // Will be set manually or via admin
-            ELEVENLABS_SETUP_AGENT_ID: elevenlabsAgentId,
+            NEXT_PUBLIC_PLATFORM_NAME: formData.platformName,
             NEXT_PUBLIC_COMPANY_NAME: formData.companyName,
           },
         }),
@@ -273,7 +301,45 @@ export default function SetupWizard() {
       setCreatedResources(prev => ({ ...prev, vercelUrl, vercelProjectId }));
       console.log('✓ Vercel project created:', vercelUrl);
 
-      setCreationStatus(prev => ({ ...prev, vercel: 'done', deployment: 'creating' }));
+      setCreationStatus(prev => ({ ...prev, vercel: 'done', elevenlabs: 'creating' }));
+
+      // ========== Step 4: Create ElevenLabs Agent (AFTER Vercel so webhook URL is valid) ==========
+      console.log('Creating ElevenLabs agent...');
+
+      const elevenlabsRes = await fetch('/api/setup/create-elevenlabs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentName: formData.agentName,
+          voiceGender: formData.voiceGender,
+          companyName: formData.companyName,
+          platformName: formData.platformName,
+          webhookUrl: `${vercelUrl}/api/webhooks/elevenlabs`,
+        }),
+      });
+
+      if (elevenlabsRes.ok) {
+        const elevenlabsData = await elevenlabsRes.json();
+        elevenlabsAgentId = elevenlabsData.agentId;
+        setCreatedResources(prev => ({ ...prev, elevenlabsAgentId }));
+        console.log('✓ ElevenLabs agent created:', elevenlabsAgentId);
+
+        // Update Vercel with ElevenLabs agent ID
+        await fetch('/api/setup/create-vercel', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId: vercelProjectId,
+            envVars: {
+              ELEVENLABS_SETUP_AGENT_ID: elevenlabsAgentId,
+            },
+          }),
+        });
+      } else {
+        console.warn('ElevenLabs creation failed, continuing...');
+      }
+
+      setCreationStatus(prev => ({ ...prev, elevenlabs: 'done', deployment: 'creating' }));
 
       // ========== Step 5: Configure Auth & Finalize ==========
       console.log('Configuring Supabase auth...');
@@ -287,7 +353,6 @@ export default function SetupWizard() {
         }),
       });
 
-      // Save platform setup to master DB
       console.log('Saving platform setup...');
 
       await fetch('/api/setup/save-platform-setup', {
@@ -295,6 +360,7 @@ export default function SetupWizard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          leadId,
           supabaseProjectId,
           supabaseUrl,
           elevenlabsAgentId,
@@ -305,7 +371,6 @@ export default function SetupWizard() {
         }),
       });
 
-      // Send welcome email
       console.log('Sending welcome email...');
 
       await fetch('/api/setup/send-welcome-email', {
@@ -315,6 +380,7 @@ export default function SetupWizard() {
           email: formData.adminEmail,
           firstName: formData.adminFirstName,
           companyName: formData.companyName,
+          platformName: formData.platformName,
           platformUrl: vercelUrl,
         }),
       });
@@ -326,10 +392,9 @@ export default function SetupWizard() {
       console.error('Creation failed:', error);
       setError(error.message || 'Failed to create platform');
 
-      // Mark current step as error
       setCreationStatus(prev => {
         const newStatus = { ...prev };
-        const steps: (keyof CreationStatus)[] = ['supabase', 'elevenlabs', 'github', 'vercel', 'deployment'];
+        const steps: (keyof CreationStatus)[] = ['supabase', 'github', 'vercel', 'elevenlabs', 'deployment'];
         for (const s of steps) {
           if (newStatus[s] === 'creating') {
             newStatus[s] = 'error';
@@ -339,12 +404,12 @@ export default function SetupWizard() {
         return newStatus;
       });
 
-      // Save failed setup
       await fetch('/api/setup/save-platform-setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          leadId,
           status: 'failed',
           error_message: error.message,
         }),
@@ -371,6 +436,21 @@ export default function SetupWizard() {
   };
 
   // ---------------------------------------------------------------------------
+  // LOADING STATE
+  // ---------------------------------------------------------------------------
+
+  if (loadingLead) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-purple-500 animate-spin mx-auto mb-4" />
+          <p className="text-slate-400">Loading your information...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // RENDER STEPS
   // ---------------------------------------------------------------------------
 
@@ -381,12 +461,24 @@ export default function SetupWizard() {
           <Building2 className="w-5 h-5 text-purple-400" />
         </div>
         <div>
-          <h2 className="text-xl font-bold">Company Information</h2>
-          <p className="text-sm text-slate-400">Tell us about your organization</p>
+          <h2 className="text-xl font-bold">Platform & Company</h2>
+          <p className="text-sm text-slate-400">Name your platform and tell us about your organization</p>
         </div>
       </div>
 
       <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Platform Name *</label>
+          <input
+            type="text"
+            value={formData.platformName}
+            onChange={(e) => updateForm('platformName', e.target.value)}
+            placeholder="Acme Talent Interviews"
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition"
+          />
+          <p className="text-xs text-slate-500 mt-1">This will be the name of your interview platform</p>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-2">Company Name *</label>
           <input
@@ -550,6 +642,14 @@ export default function SetupWizard() {
       <div className="space-y-4">
         <div className="p-4 bg-slate-800/50 rounded-lg">
           <div className="flex items-center gap-2 text-slate-400 text-sm mb-2">
+            <Layout className="w-4 h-4" />
+            Platform
+          </div>
+          <div className="text-white font-medium text-lg">{formData.platformName}</div>
+        </div>
+
+        <div className="p-4 bg-slate-800/50 rounded-lg">
+          <div className="flex items-center gap-2 text-slate-400 text-sm mb-2">
             <Building2 className="w-4 h-4" />
             Company
           </div>
@@ -588,16 +688,16 @@ export default function SetupWizard() {
               Supabase database with schema & storage buckets
             </li>
             <li className="flex items-center gap-2">
-              <Mic className="w-4 h-4 text-purple-400" />
-              ElevenLabs voice agent
-            </li>
-            <li className="flex items-center gap-2">
               <Globe className="w-4 h-4 text-slate-400" />
               GitHub repository from template
             </li>
             <li className="flex items-center gap-2">
               <Rocket className="w-4 h-4 text-blue-400" />
               Vercel deployment with env vars
+            </li>
+            <li className="flex items-center gap-2">
+              <Mic className="w-4 h-4 text-purple-400" />
+              ElevenLabs voice agent with webhook
             </li>
             <li className="flex items-center gap-2">
               <Mail className="w-4 h-4 text-orange-400" />
@@ -612,16 +712,16 @@ export default function SetupWizard() {
   const renderCreatingStep = () => (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
       <div className="text-center mb-6">
-        <h2 className="text-xl font-bold mb-2">Creating Your Platform</h2>
+        <h2 className="text-xl font-bold mb-2">Creating {formData.platformName}</h2>
         <p className="text-slate-400 text-sm">This may take 2-3 minutes...</p>
       </div>
 
       <div className="space-y-3">
         {[
           { key: 'supabase', label: 'Creating Supabase database & storage', icon: Database },
-          { key: 'elevenlabs', label: 'Creating ElevenLabs voice agent', icon: Mic },
           { key: 'github', label: 'Setting up GitHub repository', icon: Globe },
           { key: 'vercel', label: 'Creating Vercel deployment', icon: Rocket },
+          { key: 'elevenlabs', label: 'Creating ElevenLabs voice agent', icon: Mic },
           { key: 'deployment', label: 'Configuring auth & sending email', icon: CheckCircle },
         ].map((item) => {
           const status = creationStatus[item.key as keyof CreationStatus];
@@ -652,7 +752,12 @@ export default function SetupWizard() {
         })}
       </div>
 
-      {/* Success State */}
+      {error && (
+        <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+
       {creationStatus.deployment === 'done' && (
         <div className="mt-8 p-6 bg-green-500/10 border border-green-500/30 rounded-xl text-center">
           <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -661,7 +766,7 @@ export default function SetupWizard() {
 
           <h3 className="text-2xl font-bold text-green-400 mb-2">Platform Created!</h3>
           <p className="text-slate-300 mb-6">
-            {formData.companyName}'s AI Interview platform is now live.
+            {formData.platformName} is now live.
           </p>
 
           <div className="flex gap-4 justify-center flex-wrap">
@@ -700,7 +805,7 @@ export default function SetupWizard() {
   // ---------------------------------------------------------------------------
 
   const stepsList = [
-    { key: 'company', label: 'Company', icon: Building2 },
+    { key: 'company', label: 'Platform', icon: Building2 },
     { key: 'admin', label: 'Admin', icon: User },
     { key: 'voice', label: 'Voice', icon: Mic },
     { key: 'review', label: 'Review', icon: CheckCircle },
@@ -711,8 +816,8 @@ export default function SetupWizard() {
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">AI Interview Agents</h1>
-          <p className="text-slate-400">Create a new platform in minutes</p>
+          <h1 className="text-3xl font-bold mb-2">Create Your Platform</h1>
+          <p className="text-slate-400">Your AI interview platform, ready in minutes</p>
         </div>
 
         {/* Progress Steps */}
@@ -748,8 +853,8 @@ export default function SetupWizard() {
           </div>
         )}
 
-        {/* Error */}
-        {error && (
+        {/* Error (for non-creating steps) */}
+        {error && step !== 'creating' && (
           <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
             {error}
           </div>

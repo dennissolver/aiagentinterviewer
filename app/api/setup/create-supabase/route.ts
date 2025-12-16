@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { platformName } = await request.json();
+    const body = await request.json();
+    // Accept either platformName or projectName
+    const platformName = body.platformName || body.projectName;
 
     if (!platformName) {
       return NextResponse.json({ error: 'Platform name required' }, { status: 400 });
@@ -44,7 +46,6 @@ export async function POST(request: NextRequest) {
       const anonKey = keys.find((k: any) => k.name === 'anon')?.api_key;
       const serviceKey = keys.find((k: any) => k.name === 'service_role')?.api_key;
       
-      // Still configure auth URLs in case they weren't set
       await configureAuthUrls(supabaseAccessToken, existing.id, inferredVercelUrl);
       
       return NextResponse.json({
