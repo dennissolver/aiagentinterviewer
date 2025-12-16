@@ -4,12 +4,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  Mic, Phone, PhoneOff, Loader2, CheckCircle, 
+import {
+  Mic, Phone, PhoneOff, Loader2, CheckCircle,
   ArrowRight, MessageSquare, Sparkles, PartyPopper
 } from 'lucide-react';
 
-type DemoState = 
+type DemoState =
   | 'loading'
   | 'ready_for_setup'
   | 'setup_in_progress'
@@ -29,7 +29,12 @@ interface LeadData {
   website?: string;
   status: string;
   trialAgentId?: string;
-  interviewSpec?: any;
+  interviewSpec?: {
+    interview_purpose?: string;
+    target_audience?: string;
+    tone?: string;
+    estimated_duration_mins?: number;
+  };
 }
 
 export default function DemoClient() {
@@ -42,10 +47,8 @@ export default function DemoClient() {
   const [showWidget, setShowWidget] = useState(false);
   const [currentAgentId, setCurrentAgentId] = useState<string | null>(null);
 
-  // Setup Agent ID (YOUR Global Buildtech deployment)
   const SETUP_AGENT_ID = process.env.NEXT_PUBLIC_DEMO_SETUP_AGENT_ID || '';
 
-  // Poll for status updates
   const checkStatus = useCallback(async () => {
     if (!leadId) return;
 
@@ -56,7 +59,6 @@ export default function DemoClient() {
       if (res.ok) {
         setLeadData(prev => ({ ...prev, ...data }));
 
-        // Map API status to UI state
         switch (data.status) {
           case 'new':
             setState('ready_for_setup');
@@ -99,7 +101,6 @@ export default function DemoClient() {
     }
   }, [leadId]);
 
-  // Initial load and polling
   useEffect(() => {
     if (!leadId) {
       setError('No demo session found. Please start from the homepage.');
@@ -109,7 +110,6 @@ export default function DemoClient() {
 
     checkStatus();
 
-    // Poll every 3 seconds while in transitional states
     const interval = setInterval(() => {
       if (['setup_complete', 'parsing', 'creating_trial'].includes(state)) {
         checkStatus();
@@ -119,7 +119,6 @@ export default function DemoClient() {
     return () => clearInterval(interval);
   }, [leadId, state, checkStatus]);
 
-  // Load ElevenLabs widget
   useEffect(() => {
     if (showWidget && currentAgentId) {
       const existingScript = document.querySelector('script[src*="elevenlabs"]');
@@ -132,36 +131,31 @@ export default function DemoClient() {
     }
   }, [showWidget, currentAgentId]);
 
-  // Start setup call
   const startSetupCall = async () => {
     setState('setup_in_progress');
     setCurrentAgentId(SETUP_AGENT_ID);
     setShowWidget(true);
 
-    // Update lead status
-    await fetch(`/api/demo/update-status`, {
+    await fetch('/api/demo/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ leadId, status: 'setup_started' }),
     });
   };
 
-  // Start trial interview
   const startTrialInterview = async () => {
     setState('trial_in_progress');
     setShowWidget(true);
 
-    await fetch(`/api/demo/update-status`, {
+    await fetch('/api/demo/update-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ leadId, status: 'trial_started' }),
     });
   };
 
-  // End call (manual)
   const endCall = () => {
     setShowWidget(false);
-    // Status will be updated by webhook
     if (state === 'setup_in_progress') {
       setState('setup_complete');
     } else if (state === 'trial_in_progress') {
@@ -169,7 +163,6 @@ export default function DemoClient() {
     }
   };
 
-  // Render based on state
   const renderContent = () => {
     switch (state) {
       case 'loading':
@@ -188,10 +181,10 @@ export default function DemoClient() {
             </div>
             <h1 className="text-3xl font-bold mb-4">Welcome, {leadData?.name}!</h1>
             <p className="text-slate-300 mb-2">
-              Let's design your custom AI interviewer for <strong>{leadData?.company}</strong>.
+              Let us design your custom AI interviewer for <strong>{leadData?.company}</strong>.
             </p>
             <p className="text-slate-400 mb-8">
-              Our Setup Agent will ask you a few questions about what you want to build. 
+              Our Setup Agent will ask you a few questions about what you want to build.
               This takes about 3-5 minutes.
             </p>
             <button
@@ -212,14 +205,13 @@ export default function DemoClient() {
             </div>
             <h2 className="text-2xl font-bold text-green-400 mb-4">Call in Progress</h2>
             <p className="text-slate-400 mb-8">
-              Speak naturally with the Setup Agent. When you're done, click End Call.
+              Speak naturally with the Setup Agent. When you are done, click End Call.
             </p>
 
-            {/* ElevenLabs Widget */}
             {showWidget && currentAgentId && (
-              <div className="mb-6">
-                <elevenlabs-convai agent-id={currentAgentId}></elevenlabs-convai>
-              </div>
+              <div className="mb-6" dangerouslySetInnerHTML={{
+                __html: `<elevenlabs-convai agent-id="${currentAgentId}"></elevenlabs-convai>`
+              }} />
             )}
 
             <button
@@ -242,7 +234,7 @@ export default function DemoClient() {
             </div>
             <h2 className="text-2xl font-bold mb-4">Creating Your Trial Interview</h2>
             <p className="text-slate-400 mb-8">
-              We're analyzing your requirements and building a custom AI interviewer just for you...
+              We are analyzing your requirements and building a custom AI interviewer just for you...
             </p>
 
             <div className="space-y-3 text-left bg-slate-900 rounded-xl p-6">
@@ -281,7 +273,7 @@ export default function DemoClient() {
               <CheckCircle className="w-12 h-12 text-green-400" />
             </div>
             <h2 className="text-2xl font-bold text-green-400 mb-4">Your Trial is Ready!</h2>
-            
+
             {leadData?.interviewSpec && (
               <div className="bg-slate-900 rounded-xl p-6 mb-8 text-left">
                 <h3 className="font-semibold text-purple-400 mb-3">Interview Preview</h3>
@@ -320,9 +312,9 @@ export default function DemoClient() {
             </p>
 
             {showWidget && currentAgentId && (
-              <div className="mb-6">
-                <elevenlabs-convai agent-id={currentAgentId}></elevenlabs-convai>
-              </div>
+              <div className="mb-6" dangerouslySetInnerHTML={{
+                __html: `<elevenlabs-convai agent-id="${currentAgentId}"></elevenlabs-convai>`
+              }} />
             )}
 
             <button
@@ -347,7 +339,7 @@ export default function DemoClient() {
               Amazing! You just experienced your custom AI interviewer in action.
             </p>
             <p className="text-slate-400 mb-8">
-              We've sent the interview results to <strong>{leadData?.email}</strong>.
+              We have sent the interview results to <strong>{leadData?.email}</strong>.
             </p>
 
             <div className="bg-gradient-to-r from-purple-900/50 to-blue-900/50 border border-purple-500/30 rounded-xl p-6 mb-8">
@@ -356,10 +348,10 @@ export default function DemoClient() {
                 Run unlimited interviews, surveys, and questionnaires with your own AI voice agents.
               </p>
               <ul className="text-sm text-slate-400 mb-6 space-y-1">
-                <li>✓ Unlimited interview agents</li>
-                <li>✓ Full analytics dashboard</li>
-                <li>✓ Drift detection & quality monitoring</li>
-                <li>✓ $150/month + $4 per interview over 100</li>
+                <li>Unlimited interview agents</li>
+                <li>Full analytics dashboard</li>
+                <li>Drift detection and quality monitoring</li>
+                <li>$150/month + $4 per interview over 100</li>
               </ul>
               <Link
                 href={`/buyer?leadId=${leadId}`}
@@ -371,7 +363,7 @@ export default function DemoClient() {
             </div>
 
             <Link href="/" className="text-purple-400 hover:text-purple-300 text-sm">
-              ← Back to Homepage
+              Back to Homepage
             </Link>
           </div>
         );
@@ -380,7 +372,7 @@ export default function DemoClient() {
         return (
           <div className="text-center max-w-lg mx-auto">
             <div className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <span className="text-4xl">😕</span>
+              <span className="text-4xl">:(</span>
             </div>
             <h2 className="text-2xl font-bold text-red-400 mb-4">Something Went Wrong</h2>
             <p className="text-slate-400 mb-8">{error}</p>
@@ -403,16 +395,4 @@ export default function DemoClient() {
       {renderContent()}
     </div>
   );
-}
-
-// TypeScript declaration for custom element
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      'elevenlabs-convai': React.DetailedHTMLProps
-        React.HTMLAttributes<HTMLElement> & { 'agent-id': string },
-        HTMLElement
-      >;
-    }
-  }
 }
