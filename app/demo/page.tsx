@@ -1,12 +1,15 @@
-import { Suspense } from "react";
-import DemoClient from "./DemoClient";
+// app/demo/page.tsx
+import { Suspense } from 'react';
+import DemoClient from './DemoClient';
 
 export default function DemoPage() {
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center px-6">
-      <Suspense fallback={<div className="text-neutral-400">Loading...</div>}>
-        <DemoClient />
-      </Suspense>
-    </main>
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500"></div>
+      </div>
+    }>
+      <DemoClient />
+    </Suspense>
   );
 }

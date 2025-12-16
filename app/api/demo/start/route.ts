@@ -1,43 +1,57 @@
 // app/api/demo/start/route.ts
-import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase/admin";
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-export async function POST(req: Request) {
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const leadId = formData.get("leadId")?.toString();
+    const body = await req.json();
+    const { name, company, email, website } = body;
 
-    if (!leadId) {
+    if (!name || !company || !email) {
       return NextResponse.json(
-        { error: "Missing leadId" },
+        { error: 'Name, company, and email are required' },
         { status: 400 }
       );
     }
 
-    // Optional: validate lead exists
-    const { data: lead, error: leadError } = await supabaseAdmin
-      .from("demo_leads")
-      .select("id")
-      .eq("id", leadId)
+    // Store lead in database
+    const { data: lead, error } = await supabase
+      .from('demo_leads')
+      .insert({
+        name,
+        company,
+        email,
+        website: website || null,
+        status: 'new',
+        created_at: new Date().toISOString(),
+      })
+      .select()
       .single();
 
-    if (leadError || !lead) {
+    if (error) {
+      console.error('Failed to store lead:', error);
       return NextResponse.json(
-        { error: "Invalid leadId" },
-        { status: 400 }
+        { error: 'Failed to create demo session' },
+        { status: 500 }
       );
     }
 
-    // Redirect into live demo experience
-    return NextResponse.redirect(
-      new URL(`/demo/live?leadId=${leadId}`, req.url)
-    );
+    return NextResponse.json({
+      success: true,
+      leadId: lead.id,
+      redirectUrl: `/demo?leadId=${lead.id}`,
+    });
 
-  } catch (err) {
-    console.error("Demo start failed:", err);
+  } catch (error: any) {
+    console.error('Demo start error:', error);
     return NextResponse.json(
-      { error: "Invalid request" },
-      { status: 400 }
+      { error: error.message || 'Failed to start demo' },
+      { status: 500 }
     );
   }
 }

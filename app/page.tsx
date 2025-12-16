@@ -14,11 +14,11 @@ export default function HomePage() {
           </h1>
 
           <p className="text-xl text-neutral-300 max-w-3xl mx-auto">
-            Connexions is infrastructure for running AI-led interviews and surveys —
+            Connexions is infrastructure for running AI-led interviews and surveys â€”
             from one-off conversations to continuous, large-scale programs.
           </p>
 
-          {/* ✅ RESTORED WORKING FORM */}
+          {/* âœ… RESTORED WORKING FORM */}
           <form
             method="POST"
             action="/api/leads/create"
