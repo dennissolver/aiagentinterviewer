@@ -1,39 +1,45 @@
 // app/api/setup/create-elevenlabs/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-const SETUP_AGENT_PROMPT = `You are a Setup Agent for an AI Interview Platform. Your job is to help users design their custom AI interviewer through voice conversation.
+const SETUP_AGENT_PROMPT = `You are Sandra, a friendly AI Setup Agent for the Connexions AI Interview Platform. Your goal is to gather information from the user to create their custom AI interviewer.
 
-## Opening
-"Hi, I'm your AI setup assistant. I'll help you create a custom AI voice interviewer in just a few minutes. What's your name?"
-
-Then: "Great to meet you! What would you like your AI interviewer to help you with? For example: customer feedback, user research, job screening, or surveys?"
-
-## Gather These Details (one at a time)
-1. Interview purpose - what they want to learn
-2. Target audience - who will be interviewed  
-3. Tone - professional, friendly, or casual
-4. Duration - how long interviews should take
-5. Key topics - main areas to cover
-6. Constraints - topics to avoid
+## Ask these questions conversationally (one at a time):
+1. What name do you want for your Interview session?
+2. What type of interviews do you want to conduct? (job interviews, customer research, surveys, etc.)
+3. Who will be interviewed? (job candidates, customers, users, etc.)
+4. What tone should the interviewer have? (professional, casual, friendly, formal)
+5. How long should interviews typically last? (5 mins, 10 mins, 15 mins, etc.)
+6. What are 3-5 key questions or topics the interviewer should cover?
 
 ## Rules
+- Be conversational and natural
 - ONE question at a time
 - Under 30 words per response
-- Be warm and encouraging
-- Confirm before moving on
+- Confirm understanding after each answer
+- Keep the conversation under 10 minutes
 
 ## Wrap Up
-Summarize what you learned, then say:
-"Perfect! You can hang up now. Check your screen for the summary and you'll get your interview link by email shortly!"`;
+When you have all the information, summarize what you'll create and thank them.
+Say: "Perfect! I've got everything I need. Check your screen for the summary!"`;
 
 export async function POST(request: NextRequest) {
   try {
-    const { platformName, voiceGender, companyName } = await request.json();
+    const body = await request.json();
+    
+    // Accept multiple parameter formats
+    const platformName = body.platformName || body.projectName || body.formData?.platformName;
+    const companyName = body.companyName || body.formData?.companyName || platformName;
+    const voiceGender = body.voiceGender || body.formData?.voiceGender || 'female';
+    const webhookUrl = body.webhookUrl || '';
 
     const elevenlabsApiKey = process.env.ELEVENLABS_API_KEY;
 
     if (!elevenlabsApiKey) {
       return NextResponse.json({ error: 'ELEVENLABS_API_KEY not configured' }, { status: 500 });
+    }
+
+    if (!platformName) {
+      return NextResponse.json({ error: 'Platform name required' }, { status: 400 });
     }
 
     const agentDisplayName = `${companyName || platformName} Setup Agent`;
@@ -60,10 +66,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create new agent
+    // Select voice based on gender
     const voiceId = voiceGender === 'male' ? 'pNInz6obpgDQGcFmaJgB' : 'EXAVITQu4vr4xnSDxMaL';
 
     console.log('Creating ElevenLabs agent:', agentDisplayName);
+
+    // Build agent config
+    const agentConfig: any = {
+      name: agentDisplayName,
+      conversation_config: {
+        agent: {
+          prompt: { prompt: SETUP_AGENT_PROMPT },
+          first_message: "Hello! I'm Sandra, your Connexions AI Interview Platform setup assistant. How can we help you today?",
+          language: 'en',
+        },
+        tts: {
+          voice_id: voiceId,
+          model_id: 'eleven_turbo_v2_5',
+        },
+        stt: { provider: 'elevenlabs' },
+        turn: { mode: 'turn_based' },
+      },
+    };
+
+    // Add webhook if provided
+    if (webhookUrl) {
+      agentConfig.conversation_config.webhooks = {
+        post_call: { url: webhookUrl },
+      };
+    }
 
     const createRes = await fetch('https://api.elevenlabs.io/v1/convai/agents/create', {
       method: 'POST',
@@ -71,29 +102,14 @@ export async function POST(request: NextRequest) {
         'xi-api-key': elevenlabsApiKey,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        name: agentDisplayName,
-        conversation_config: {
-          agent: {
-            prompt: { prompt: SETUP_AGENT_PROMPT },
-            first_message: "Hi, I'm your AI setup assistant. I'll help you create a custom AI voice interviewer in just a few minutes. What's your name?",
-            language: 'en',
-          },
-          tts: {
-            voice_id: voiceId,
-            model_id: 'eleven_turbo_v2_5',
-          },
-          stt: { provider: 'elevenlabs' },
-          turn: { mode: 'turn_based' },
-        },
-      }),
+      body: JSON.stringify(agentConfig),
     });
 
     if (!createRes.ok) {
       const error = await createRes.json();
       console.error('ElevenLabs creation failed:', error);
       return NextResponse.json(
-        { error: error.detail?.message || error.detail || 'Failed to create agent' },
+        { error: error.detail?.message || error.detail || JSON.stringify(error) },
         { status: 400 }
       );
     }
@@ -104,7 +120,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       agentId: agent.agent_id,
-      agentName: agent.name,
+      agentName: agent.name || agentDisplayName,
     });
 
   } catch (error: any) {
