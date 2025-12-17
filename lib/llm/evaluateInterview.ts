@@ -1,6 +1,6 @@
-import OpenAI from "openai";
+// lib/llm/evaluateInterview.ts
 
-const openai = new OpenAI();
+import { anthropic } from "./anthropic";
 
 export async function evaluateInterview({
   transcript,
@@ -11,29 +11,25 @@ export async function evaluateInterview({
   goal: string;
   questions: any[];
 }) {
-  const res = await openai.chat.completions.create({
-    model: "gpt-4.1",
-    temperature: 0,
+  const res = await anthropic.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4096,
     messages: [
       {
-        role: "system",
-        content: `
-You are an interview evaluation engine.
-Your job is to assess signal quality, role adherence, and insight extraction.
-Be precise. No hype.
-Return valid JSON only.
-        `,
-      },
-      {
         role: "user",
-        content: JSON.stringify({
-          goal,
-          questions,
-          transcript,
-        }),
+        content: JSON.stringify({ goal, questions, transcript }),
       },
     ],
+    system: `You are an interview evaluation engine.
+Your job is to assess signal quality, role adherence, and insight extraction.
+Be precise. No hype.
+Return valid JSON only.`,
   });
 
-  return JSON.parse(res.choices[0].message.content!);
+  const textBlock = res.content.find((block) => block.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("No text response from Claude");
+  }
+
+  return JSON.parse(textBlock.text);
 }
