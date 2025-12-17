@@ -1,43 +1,23 @@
+// app/api/agents/[agentId]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
 
-/**
- * GET /api/agents/[agentId]
- * Fetches an agent by ID or slug
- */
 export async function GET(
   request: NextRequest,
   { params }: { params: { agentId: string } }
 ) {
   try {
-    const agentIdOrSlug = params.agentId;
+    const supabase = createClient();
+    const agentId = params.agentId;
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return NextResponse.json(
-        { error: 'Database not configured' },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Try to find by UUID first, then by slug
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(agentIdOrSlug);
-
+    // Try to find by ID first, then by slug
     let query = supabase
       .from('agents')
-      .select('*');
+      .select('*')
+      .or(`id.eq.${agentId},slug.eq.${agentId}`)
+      .single();
 
-    if (isUUID) {
-      query = query.eq('id', agentIdOrSlug);
-    } else {
-      query = query.eq('slug', agentIdOrSlug);
-    }
-
-    const { data: agent, error } = await query.single();
+    const { data: agent, error } = await query;
 
     if (error || !agent) {
       return NextResponse.json(
@@ -47,11 +27,10 @@ export async function GET(
     }
 
     return NextResponse.json({ agent });
-
   } catch (error) {
-    console.error('Get agent error:', error);
+    console.error('Error fetching agent:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch agent' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

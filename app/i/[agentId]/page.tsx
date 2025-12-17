@@ -1,3 +1,4 @@
+// app/i/[agentId]/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -29,33 +30,24 @@ type Stage = 'loading' | 'welcome' | 'call' | 'complete' | 'error';
 
 export default function VoiceInterviewPage() {
   const params = useParams();
-
-  // Accept demo-* or normal ids
   const rawAgentId = params.agentId as string;
   const agentId = rawAgentId.replace(/^demo-/, '');
 
   const [stage, setStage] = useState<Stage>('loading');
   const [agent, setAgent] = useState<Agent | null>(null);
   const [error, setError] = useState('');
-  const [callStatus, setCallStatus] =
-    useState<'idle' | 'connecting' | 'connected'>('idle');
+  const [callStatus, setCallStatus] = useState<'idle' | 'connecting' | 'connected'>('idle');
   const [isMuted, setIsMuted] = useState(false);
   const [conversation, setConversation] = useState<any>(null);
   const [interviewId, setInterviewId] = useState<string | null>(null);
 
-  /* ----------------------------------------
-     Load agent on mount
-  ---------------------------------------- */
   useEffect(() => {
     loadAgent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
 
   const loadAgent = async () => {
     try {
-      const res = await fetch(`/api/agents/${agentId}`, {
-        cache: 'no-store'
-      });
+      const res = await fetch(`/api/agents/${agentId}`, { cache: 'no-store' });
       const json = await res.json();
 
       if (!res.ok) {
@@ -65,14 +57,11 @@ export default function VoiceInterviewPage() {
       setAgent(json.agent ?? json);
       setStage('welcome');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load interviews');
+      setError(err instanceof Error ? err.message : 'Failed to load interview');
       setStage('error');
     }
   };
 
-  /* ----------------------------------------
-     Start voice call
-  ---------------------------------------- */
   const startCall = async () => {
     if (!agent) return;
 
@@ -122,9 +111,6 @@ export default function VoiceInterviewPage() {
     }
   };
 
-  /* ----------------------------------------
-     End call
-  ---------------------------------------- */
   const endCall = async () => {
     if (conversation) {
       await conversation.endSession();
@@ -134,18 +120,12 @@ export default function VoiceInterviewPage() {
     saveInterview('completed');
   };
 
-  /* ----------------------------------------
-     Mute / Unmute
-  ---------------------------------------- */
   const toggleMute = () => {
     if (!conversation) return;
     isMuted ? conversation.unmute() : conversation.mute();
     setIsMuted(!isMuted);
   };
 
-  /* ----------------------------------------
-     Save interviews state
-  ---------------------------------------- */
   const saveInterview = async (status: string) => {
     if (!interviewId) return;
     try {
@@ -155,19 +135,13 @@ export default function VoiceInterviewPage() {
         body: JSON.stringify({ interviewId, status })
       });
     } catch (err) {
-      console.error('Failed to save interviews', err);
+      console.error('Failed to save interview', err);
     }
   };
 
-  /* ----------------------------------------
-     Branding
-  ---------------------------------------- */
   const primaryColor = agent?.primary_color || '#8B5CF6';
   const backgroundColor = agent?.background_color || '#0F172A';
 
-  /* ----------------------------------------
-     UI
-  ---------------------------------------- */
   return (
     <div
       className="min-h-screen text-white flex flex-col"
@@ -185,9 +159,7 @@ export default function VoiceInterviewPage() {
           )}
           <div>
             <h1 className="font-semibold">{agent?.name || 'Interview'}</h1>
-            <p className="text-sm text-white/60">
-              {agent?.company_name}
-            </p>
+            <p className="text-sm text-white/60">{agent?.company_name}</p>
           </div>
         </div>
       </header>
@@ -195,7 +167,6 @@ export default function VoiceInterviewPage() {
       {/* Main */}
       <main className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="text-center max-w-lg">
-
           {stage === 'loading' && (
             <Loader2 className="w-12 h-12 animate-spin mx-auto text-white/50" />
           )}
@@ -203,7 +174,7 @@ export default function VoiceInterviewPage() {
           {stage === 'error' && (
             <>
               <div className="w-24 h-24 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                😕
+                <span className="text-4xl">😕</span>
               </div>
               <h2 className="text-2xl font-bold mb-4">Something went wrong</h2>
               <p className="text-white/60">{error}</p>
@@ -250,9 +221,7 @@ export default function VoiceInterviewPage() {
                 }`}
                 style={{
                   backgroundColor:
-                    callStatus === 'connected'
-                      ? '#22c55e20'
-                      : `${primaryColor}20`
+                    callStatus === 'connected' ? '#22c55e20' : `${primaryColor}20`
                 }}
               >
                 {callStatus === 'connecting' ? (
@@ -266,18 +235,13 @@ export default function VoiceInterviewPage() {
                 <button
                   onClick={toggleMute}
                   className={`p-4 rounded-full ${
-                    isMuted
-                      ? 'bg-yellow-500/20 text-yellow-400'
-                      : 'bg-white/10'
+                    isMuted ? 'bg-yellow-500/20 text-yellow-400' : 'bg-white/10'
                   }`}
                 >
                   {isMuted ? <MicOff /> : <Mic />}
                 </button>
 
-                <button
-                  onClick={endCall}
-                  className="p-4 bg-red-600 rounded-full"
-                >
+                <button onClick={endCall} className="p-4 bg-red-600 rounded-full">
                   <PhoneOff />
                 </button>
               </div>
@@ -289,12 +253,9 @@ export default function VoiceInterviewPage() {
               <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
                 <CheckCircle className="w-10 h-10 text-green-400" />
               </div>
-              <h2 className="text-2xl font-bold mb-4">
-                Interview complete
-              </h2>
+              <h2 className="text-2xl font-bold mb-4">Interview complete</h2>
               <p className="text-white/60">
-                {agent?.closing_message ||
-                  'Thank you for your time.'}
+                {agent?.closing_message || 'Thank you for your time.'}
               </p>
             </>
           )}
