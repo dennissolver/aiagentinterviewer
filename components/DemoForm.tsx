@@ -13,7 +13,7 @@ export default function DemoForm() {
 
     // Brief delay for UX feedback, then redirect to demo
     await new Promise(resolve => setTimeout(resolve, 500));
-    window.location.href = 'https://connexion-demo-opal.vercel.app/';
+    window.location.href = 'https://universal-interviews.vercel.app/';
   };
 
   return (
