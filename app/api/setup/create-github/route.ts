@@ -8,7 +8,7 @@ const GITHUB_API = 'https://api.github.com';
 // ============================================================================
 
 const TEMPLATE_FILES: Record<string, string> = {
-  'package.json': `{
+    'package.json': `{
   "name": "connexions-interview-platform",
   "version": "1.0.0",
   "private": true,
@@ -46,7 +46,7 @@ const TEMPLATE_FILES: Record<string, string> = {
   }
 }`,
 
-  'next.config.js': `// next.config.js
+    'next.config.js': `// next.config.js
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -61,7 +61,7 @@ const nextConfig = {
 
 module.exports = nextConfig;`,
 
-  'tsconfig.json': `{
+    'tsconfig.json': `{
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
@@ -82,7 +82,7 @@ module.exports = nextConfig;`,
   "exclude": ["node_modules"]
 }`,
 
-  'tailwind.config.js': `// tailwind.config.js
+    'tailwind.config.js': `// tailwind.config.js
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -105,7 +105,7 @@ module.exports = {
   ],
 };`,
 
-  'postcss.config.js': `// postcss.config.js
+    'postcss.config.js': `// postcss.config.js
 module.exports = {
   plugins: {
     tailwindcss: {},
@@ -113,7 +113,7 @@ module.exports = {
   },
 };`,
 
-  '.gitignore': `# Dependencies
+    '.gitignore': `# Dependencies
 /node_modules
 /.pnp
 .pnp.js
@@ -140,7 +140,7 @@ module.exports = {
 *.tsbuildinfo
 next-env.d.ts`,
 
-  '.env.example': `# Supabase Configuration
+    '.env.example': `# Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
@@ -161,7 +161,7 @@ CHILD_PLATFORM_ID=your-platform-id
 # Email (optional - for sending invites)
 RESEND_API_KEY=your-resend-api-key`,
 
-  'app/globals.css': `/* app/globals.css */
+    'app/globals.css': `/* app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -177,7 +177,7 @@ body {
   color: #F8FAFC;
 }`,
 
-  'app/layout.tsx': `// app/layout.tsx
+    'app/layout.tsx': `// app/layout.tsx
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
@@ -202,10 +202,10 @@ export default function RootLayout({
   );
 }`,
 
-  // ============================================================================
-  // MAIN PAGE - AI Setup Agent
-  // ============================================================================
-  'app/page.tsx': `// app/page.tsx
+    // ============================================================================
+    // MAIN PAGE - AI Setup Agent
+    // ============================================================================
+    'app/page.tsx': `// app/page.tsx
 import { Suspense } from 'react';
 import SetupClient from './SetupClient';
 
@@ -221,10 +221,10 @@ export default function HomePage() {
   );
 }`,
 
-  // ============================================================================
-  // SETUP CLIENT - Main AI Agent Setup Flow
-  // ============================================================================
-  'app/SetupClient.tsx': `// app/SetupClient.tsx
+    // ============================================================================
+    // SETUP CLIENT - Main AI Agent Setup Flow
+    // ============================================================================
+    'app/SetupClient.tsx': `// app/SetupClient.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -504,10 +504,10 @@ export default function SetupClient() {
   );
 }`,
 
-  // ============================================================================
-  // VOICE AVATAR COMPONENT
-  // ============================================================================
-  'app/components/VoiceAvatar.tsx': `// app/components/VoiceAvatar.tsx
+    // ============================================================================
+    // VOICE AVATAR COMPONENT
+    // ============================================================================
+    'app/components/VoiceAvatar.tsx': `// app/components/VoiceAvatar.tsx
 'use client';
 
 import { Bot } from 'lucide-react';
@@ -542,10 +542,10 @@ export default function VoiceAvatar({ isActive = false, isSpeaking = false, size
   );
 }`,
 
-  // ============================================================================
-  // PANEL COMPLETE PAGE
-  // ============================================================================
-  'app/panel/[panelId]/complete/page.tsx': `// app/panel/[panelId]/complete/page.tsx
+    // ============================================================================
+    // PANEL COMPLETE PAGE
+    // ============================================================================
+    'app/panel/[panelId]/complete/page.tsx': `// app/panel/[panelId]/complete/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -613,10 +613,10 @@ export default function PanelCompletePage() {
   );
 }`,
 
-  // ============================================================================
-  // INVITE PAGE - Single & Bulk Invites
-  // ============================================================================
-  'app/panel/[panelId]/invite/page.tsx': `// app/panel/[panelId]/invite/page.tsx
+    // ============================================================================
+    // INVITE PAGE - Single & Bulk Invites
+    // ============================================================================
+    'app/panel/[panelId]/invite/page.tsx': `// app/panel/[panelId]/invite/page.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -754,10 +754,10 @@ export default function InvitePage() {
   );
 }`,
 
-  // ============================================================================
-  // API: SEND INVITES
-  // ============================================================================
-  'app/api/invites/send/route.ts': `// app/api/invites/send/route.ts
+    // ============================================================================
+    // API: SEND INVITES
+    // ============================================================================
+    'app/api/invites/send/route.ts': `// app/api/invites/send/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { clientConfig } from '@/config/client';
@@ -804,10 +804,10 @@ export async function POST(request: NextRequest) {
   } catch (error: any) { return NextResponse.json({ error: error.message }, { status: 500 }); }
 }`,
 
-  // ============================================================================
-  // API: PARSE EXCEL
-  // ============================================================================
-  'app/api/invites/parse-excel/route.ts': `// app/api/invites/parse-excel/route.ts
+    // ============================================================================
+    // API: PARSE EXCEL
+    // ============================================================================
+    'app/api/invites/parse-excel/route.ts': `// app/api/invites/parse-excel/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 
@@ -843,10 +843,10 @@ export async function POST(request: NextRequest) {
   } catch (error: any) { return NextResponse.json({ error: 'Failed to parse file: ' + error.message }, { status: 500 }); }
 }`,
 
-  // ============================================================================
-  // API: VALIDATE INVITE TOKEN
-  // ============================================================================
-  'app/api/invites/validate/route.ts': `// app/api/invites/validate/route.ts
+    // ============================================================================
+    // API: VALIDATE INVITE TOKEN
+    // ============================================================================
+    'app/api/invites/validate/route.ts': `// app/api/invites/validate/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -862,10 +862,10 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ intervieweeId: data.id, name: data.name, status: data.status });
 }`,
 
-  // ============================================================================
-  // API: UPDATE INTERVIEWEE STATUS
-  // ============================================================================
-  'app/api/invites/update-status/route.ts': `// app/api/invites/update-status/route.ts
+    // ============================================================================
+    // API: UPDATE INTERVIEWEE STATUS
+    // ============================================================================
+    'app/api/invites/update-status/route.ts': `// app/api/invites/update-status/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -887,10 +887,10 @@ export async function POST(request: NextRequest) {
   } catch (error: any) { return NextResponse.json({ error: error.message }, { status: 500 }); }
 }`,
 
-  // ============================================================================
-  // INTERVIEW PAGE
-  // ============================================================================
-  'app/i/[agentId]/page.tsx': `// app/i/[agentId]/page.tsx
+    // ============================================================================
+    // INTERVIEW PAGE
+    // ============================================================================
+    'app/i/[agentId]/page.tsx': `// app/i/[agentId]/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -971,10 +971,10 @@ export default function InterviewPage() {
   );
 }`,
 
-  // ============================================================================
-  // API: GET AGENT
-  // ============================================================================
-  'app/api/agents/[agentId]/route.ts': `// app/api/agents/[agentId]/route.ts
+    // ============================================================================
+    // API: GET AGENT
+    // ============================================================================
+    'app/api/agents/[agentId]/route.ts': `// app/api/agents/[agentId]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -986,10 +986,10 @@ export async function GET(request: NextRequest, { params }: { params: { agentId:
   return NextResponse.json(data);
 }`,
 
-  // ============================================================================
-  // SUPABASE CLIENT
-  // ============================================================================
-  'lib/supabase.ts': `// lib/supabase.ts
+    // ============================================================================
+    // SUPABASE CLIENT
+    // ============================================================================
+    'lib/supabase.ts': `// lib/supabase.ts
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 // Singleton pattern - prevents multiple GoTrueClient instances
@@ -1005,6 +1005,7 @@ export function createClient() {
   client = createSupabaseClient(supabaseUrl, supabaseKey);
   return client;
 }`,
+};
 
 // ============================================================================
 // DYNAMIC CONFIG FILE - Generated per client
