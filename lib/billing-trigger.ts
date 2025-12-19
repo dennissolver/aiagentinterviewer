@@ -1,12 +1,10 @@
 // lib/billing-trigger.ts
-// Call this function AFTER saving a transcript/interview to Supabase
-// Updated to work with clients + billing_accounts tables
 
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
+  apiVersion: '2025-12-15.clover',
 });
 
 const supabase = createClient(

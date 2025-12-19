@@ -1,12 +1,11 @@
 // app/api/stripe/webhook/route.ts
-// Updated for existing clients + billing_accounts schema
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
+  apiVersion: '2025-12-15.clover',
 });
 
 const supabase = createClient(
@@ -205,7 +204,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
     await supabase
       .from('billing_accounts')
       .update({
-        used_interviews: 0,  // Reset counter!
+        used_interviews: 0,
         last_invoice_paid_at: new Date().toISOString(),
       })
       .eq('client_id', client.id);
