@@ -209,6 +209,7 @@ async function reportToStripeMeter(
     console.error('Stripe meter reporting failed:', error.message);
 
     // Store for manual retry/reconciliation
+    // Note: Supabase returns { data, error } - doesn't throw on insert failures
     await supabase
       .from('billing_failures')
       .insert({
@@ -217,8 +218,7 @@ async function reportToStripeMeter(
         stripe_customer_id: stripeCustomerId,
         error: error.message,
         created_at: new Date().toISOString(),
-      })
-      .catch(() => {});
+      });
 
     return false;
   }
