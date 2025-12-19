@@ -8,7 +8,7 @@ import Link from 'next/link';
 import {
   CheckCircle, Rocket, CreditCard, Shield,
   BarChart3, Users, Mic, ArrowRight, Loader2,
-  Building2, Globe, Database, Palette, Headphones
+  Building2, Globe, Database, Palette, Headphones, Layers
 } from 'lucide-react';
 
 export default function BuyerClient() {
@@ -134,27 +134,42 @@ export default function BuyerClient() {
                 <Feature icon={Database} text="Dedicated secure database" />
                 <Feature icon={Globe} text="Custom domain support" />
                 <Feature icon={Palette} text="Branded to your company style" />
-                <Feature icon={Mic} text="Unlimited interview agents" />
+                <Feature icon={Layers} text="Unlimited interview panels" highlight />
               </div>
             </div>
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Included Monthly</h3>
               <div className="space-y-3">
-                <Feature icon={Users} text="100 interviews included" highlight />
+                <Feature icon={Users} text="100 completed interviews included" highlight />
                 <Feature icon={BarChart3} text="Analytics dashboard" />
                 <Feature icon={Shield} text="Drift detection & scoring" />
                 <Feature icon={Headphones} text="Full setup assistance" />
-                <Feature icon={CreditCard} text="$5 per extra interview" subtle />
+                <Feature icon={CreditCard} text="$5 per extra completed interview" subtle />
               </div>
             </div>
           </div>
 
-          {/* Overage explanation */}
-          <div className="bg-slate-800/50 rounded-xl p-4 mb-8 text-sm text-slate-400">
-            <p>
-              <strong className="text-slate-300">Usage billing:</strong> Your first 100 interviews each month are included.
-              Additional interviews are billed at $5 each in arrears with your next monthly payment.
-            </p>
+          {/* Clear explanation */}
+          <div className="bg-slate-800/50 rounded-xl p-5 mb-8">
+            <h4 className="text-slate-200 font-medium mb-3">How billing works:</h4>
+            <ul className="space-y-2 text-sm text-slate-400">
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                <span><strong className="text-slate-300">Interview panels</strong> are unlimited - create as many different interview types as you need</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                <span><strong className="text-slate-300">Completed interviews</strong> are counted when an interviewee finishes a conversation</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                <span><strong className="text-slate-300">100 included</strong> - for example, run 20 panels × 5 interviewees = 100 interviews</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                <span><strong className="text-slate-300">Overage billing</strong> - $5 per completed interview above 100, billed in arrears with your next payment</span>
+              </li>
+            </ul>
           </div>
 
           {/* Form fields for new customers */}
