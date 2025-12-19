@@ -2,12 +2,13 @@
 
 'use client';
 
+import { Suspense } from 'react';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle, Rocket, ArrowRight, Loader2, Mail } from 'lucide-react';
 
-export default function SubscriptionSuccessPage() {
+function SuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const leadId = searchParams.get('leadId');
@@ -19,7 +20,6 @@ export default function SubscriptionSuccessPage() {
 
   useEffect(() => {
     if (sessionId) {
-      // Verify the session with our backend
       fetch(`/api/stripe/verify-session?session_id=${sessionId}`)
         .then(res => res.json())
         .then(data => {
@@ -36,7 +36,6 @@ export default function SubscriptionSuccessPage() {
           setVerifying(false);
         });
     } else {
-      // No session ID, assume direct navigation
       setVerifying(false);
       setVerified(true);
     }
@@ -77,7 +76,6 @@ export default function SubscriptionSuccessPage() {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
       <div className="max-w-lg text-center">
-        {/* Success animation */}
         <div className="relative mb-8">
           <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mx-auto animate-pulse">
             <CheckCircle className="w-12 h-12 text-green-400" />
@@ -102,7 +100,6 @@ export default function SubscriptionSuccessPage() {
           </div>
         )}
 
-        {/* What happens next */}
         <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 mb-8 text-left">
           <h2 className="font-semibold text-white mb-4">What happens next?</h2>
           <ol className="space-y-3 text-slate-400">
@@ -121,7 +118,6 @@ export default function SubscriptionSuccessPage() {
           </ol>
         </div>
 
-        {/* CTA */}
         <Link
           href={`/factory/provision${leadId ? `?leadId=${leadId}` : ''}`}
           className="inline-flex items-center gap-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 px-8 py-4 rounded-xl font-semibold text-lg transition-all"
@@ -136,5 +132,20 @@ export default function SubscriptionSuccessPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function SubscriptionSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-purple-500 animate-spin mx-auto mb-4" />
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </div>
+    }>
+      <SuccessContent />
+    </Suspense>
   );
 }
