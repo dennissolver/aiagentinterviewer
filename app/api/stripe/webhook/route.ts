@@ -150,7 +150,7 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     })
     .eq('stripe_customer_id', customerId);
 
-  // Update billing period
+  // Update billing period - access from items if available
   const { data: client } = await supabase
     .from('clients')
     .select('id')
@@ -158,13 +158,20 @@ async function handleSubscriptionChange(subscription: Stripe.Subscription) {
     .single();
 
   if (client) {
-    await supabase
-      .from('billing_accounts')
-      .update({
-        current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-        current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-      })
-      .eq('client_id', client.id);
+    // Get period dates from subscription object (use type assertion for raw data)
+    const subData = subscription as any;
+    const periodStart = subData.current_period_start;
+    const periodEnd = subData.current_period_end;
+
+    if (periodStart && periodEnd) {
+      await supabase
+        .from('billing_accounts')
+        .update({
+          current_period_start: new Date(periodStart * 1000).toISOString(),
+          current_period_end: new Date(periodEnd * 1000).toISOString(),
+        })
+        .eq('client_id', client.id);
+    }
   }
 }
 
